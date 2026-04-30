@@ -20,7 +20,7 @@ public class ConverterHelper
                 if (instance != null)
                 {
                     instances.Add(instance);
-                    Debug.Log($"成功创建转换器: {type.Name}");
+                    //Debug.Log($"成功创建转换器: {type.Name}");
                 }
             }
             catch (Exception ex)
