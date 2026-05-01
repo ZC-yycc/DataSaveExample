@@ -45,16 +45,16 @@ public class SaveSlotInfo
 [Serializable]
 public class SaveSlotsMeta
 {
-    public int                                          current_slot_id_ = 0;
+    public int                                          current_slot_id_ = -1; // -1 表示无激活槽位
     public List<SaveSlotInfo>                           slots_ = new List<SaveSlotInfo>();
 }
 
 public static class SaveManager
 {
-    private static JObject                              root_json_object_;
+    private static JObject                              root_json_object_ = new JObject(); // 当前存档的内存数据对象
     private static JsonSerializerSettings               serializer_settings_;
     private static SaveSlotsMeta                        slots_meta_;
-    private static int                                  current_slot_id_ = 0;
+    private static int                                  current_slot_id_ = -1;
 
     private static string                               persistent_data_path_;
     private const string                                SLOTS_META_FILE = "save_slots_meta.json";   // 多存档元数据文件
@@ -127,60 +127,6 @@ public static class SaveManager
         else
         {
             slots_meta_ = new SaveSlotsMeta();
-
-            // 尝试迁移旧版单存档文件
-            TryMigrateLegacySave();
-        }
-
-        // 切换到当前槽位
-        if (slots_meta_.slots_.Count > 0)
-        {
-            // 确保 current_slot_id 有效
-            bool slot_exists = slots_meta_.slots_.Any(s => s.slot_id_ == slots_meta_.current_slot_id_);
-            if (!slot_exists)
-            {
-                slots_meta_.current_slot_id_ = slots_meta_.slots_[0].slot_id_;
-            }
-            SwitchToSlotInternal(slots_meta_.current_slot_id_);
-        }
-        else
-        {
-            // 没有任何存档槽位，创建默认槽位
-            CreateSaveSlot("默认存档");
-        }
-    }
-
-    /// <summary>
-    /// 尝试将旧版单存档文件迁移为新的多存档槽位
-    /// </summary>
-    private static void TryMigrateLegacySave()
-    {
-        string legacy_path = Path.Combine(persistent_data_path_, LEGACY_FILE_NAME);
-        if (File.Exists(legacy_path))
-        {
-            try
-            {
-                // 创建新槽位
-                SaveSlotInfo slot = new SaveSlotInfo(0, "迁移的存档");
-                slots_meta_.slots_.Add(slot);
-                slots_meta_.current_slot_id_ = 0;
-
-                // 将旧存档内容复制到新槽位文件
-                string new_path = GetSlotFilePath(0);
-                File.Copy(legacy_path, new_path, overwrite: true);
-
-                // 删除旧文件
-                File.Delete(legacy_path);
-
-                // 保存元数据
-                SaveSlotsMetaToFile();
-
-                Debug.Log("已将旧版存档迁移到多存档系统");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"迁移旧版存档失败: {ex.Message}");
-            }
         }
     }
     #endregion
@@ -189,16 +135,15 @@ public static class SaveManager
 
     #region 存档槽位管理
     /// <summary>
-    /// 创建一个新的存档槽位
+    /// 创建一个新的存档槽位，如果这是第一个槽位，则自动激活它
     /// </summary>
     /// <param name="slot_name">槽位名称</param>
     /// <returns>新创建的槽位信息</returns>
     public static SaveSlotInfo CreateSaveSlot(string slot_name)
     {
         // 自动生成槽位ID（使用最大ID + 1）
-        int new_id = slots_meta_.slots_.Count > 0
-            ? slots_meta_.slots_.Max(s => s.slot_id_) + 1
-            : 0;
+        int new_id = slots_meta_.slots_.Count > 0 ? 
+            slots_meta_.slots_.Max(s => s.slot_id_) + 1 : 0;
 
         SaveSlotInfo new_slot = new SaveSlotInfo(new_id, slot_name);
         slots_meta_.slots_.Add(new_slot);
@@ -207,7 +152,7 @@ public static class SaveManager
         if (slots_meta_.slots_.Count == 1)
         {
             slots_meta_.current_slot_id_ = new_id;
-            root_json_object_ = new JObject();
+            current_slot_id_ = new_id;
             SaveCurrentSlotToFile();
         }
 
@@ -230,13 +175,6 @@ public static class SaveManager
             return false;
         }
 
-        // 如果删除的是当前激活的槽位，需要先保存并切换
-        if (slot_id == current_slot_id_)
-        {
-            SaveCurrentSlotToFile();
-            root_json_object_ = new JObject();
-        }
-
         // 删除槽位文件
         string slot_path = GetSlotFilePath(slot_id);
         if (File.Exists(slot_path))
@@ -252,22 +190,10 @@ public static class SaveManager
         }
 
         // 从元数据中移除
+        root_json_object_ = new JObject(); // 清空内存数据
         slots_meta_.slots_.Remove(slot);
-
-        // 如果删除的是当前槽位，切换到第一个可用槽位
-        if (slot_id == current_slot_id_)
-        {
-            if (slots_meta_.slots_.Count > 0)
-            {
-                slots_meta_.current_slot_id_ = slots_meta_.slots_[0].slot_id_;
-                SwitchToSlotInternal(slots_meta_.current_slot_id_);
-            }
-            else
-            {
-                slots_meta_.current_slot_id_ = 0;
-                current_slot_id_ = -1; // 无槽位
-            }
-        }
+        slots_meta_.current_slot_id_ = -1; // 无激活槽位
+        current_slot_id_ = -1; // 无槽位
 
         SaveSlotsMetaToFile();
         Debug.Log($"已删除存档槽位: [{slot_id}] {slot.slot_name_}");
@@ -336,9 +262,6 @@ public static class SaveManager
         current_slot_id_ = -1;
 
         SaveSlotsMetaToFile();
-
-        // 创建一个默认槽位
-        CreateSaveSlot("默认存档");
         Debug.Log("已删除所有存档并创建新的默认存档");
     }
 
@@ -385,11 +308,17 @@ public static class SaveManager
     {
         try
         {
+            if(current_slot_id_ < 0)
+            {
+                SwitchToSlotById(CreateSaveSlot("新存档").slot_id_, false);
+            }
+
             key ??= typeof(T).Name;
             string obj_json = JsonConvert.SerializeObject(obj, Formatting.Indented, serializer_settings_);
             JToken obj_node = JToken.Parse(obj_json);
             root_json_object_[key] = obj_node;
             SaveCurrentSlotToFile();
+            Debug.Log($"已保存 {key} 类型的存档数据");
         }
         catch (JsonException ex)
         {
@@ -403,11 +332,16 @@ public static class SaveManager
     public static void SaveData(object obj, string key)
     {
         try
-        {
+        {            
+            if(current_slot_id_ < 0)
+            {
+                SwitchToSlotById(CreateSaveSlot("新存档").slot_id_, false);
+            }
             string obj_json = JsonConvert.SerializeObject(obj, Formatting.Indented, serializer_settings_);
             JToken obj_node = JToken.Parse(obj_json);
             root_json_object_[key] = obj_node;
             SaveCurrentSlotToFile();
+            Debug.Log($"已保存 {key} 类型的存档数据");
         }
         catch (JsonException ex)
         {
@@ -424,9 +358,9 @@ public static class SaveManager
     /// </summary>
     public static T ReadData<T>(string key = null) where T : class
     {
-        key ??= typeof(T).Name;
         try
         {
+            key ??= typeof(T).Name;
             if (root_json_object_.TryGetValue(key, out JToken token))
             {
                 return JsonConvert.DeserializeObject<T>(token.ToString(), serializer_settings_);
@@ -467,10 +401,10 @@ public static class SaveManager
     /// </summary>
     public static bool TryReadData<T>(out T data, string key = null) where T : class
     {
-        key ??= typeof(T).Name;
         data = null;
         try
         {
+            key ??= typeof(T).Name;
             if (root_json_object_.TryGetValue(key, out JToken token))
             {
                 data = JsonConvert.DeserializeObject<T>(token.ToString(), serializer_settings_);
@@ -573,8 +507,8 @@ public static class SaveManager
     public static void DeleteSaveData()
     {
         root_json_object_ = new JObject();
-        SaveCurrentSlotToFile();
         Debug.Log("已清空当前存档数据");
+        SaveCurrentSlotToFile();
 
         // 更新槽位的最后保存时间
         UpdateCurrentSlotLastSaveTime();
@@ -693,6 +627,7 @@ public static class SaveManager
         // 在 SaveData 中被频繁调用。改为在槽位切换和退出时统一保存元数据。
         // 但为了确保 LastSaveTime 不丢失，这里也保存元数据（开销很小）
         SaveSlotsMetaToFile();
+        Debug.Log($"保存当前存档成功");
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -41,11 +42,8 @@ public class DebugPanel : MonoSingleton<DebugPanel>
     {
         Application.logMessageReceived += HandleLog;
 
-        // 添加默认变量
-        AddGameVariable("PlayerHealth", 100);
-        AddGameVariable("PlayerScore", 0);
-        AddGameVariable("Level", 1);
-        AddGameVariable("GameVersion", Application.version);
+        // 扫描 DebugToolBase 子类中标记 [DebugProperty] 的变量并注册
+        LoadDebugProperties();
     }
 
     protected override void OnDestroy()
@@ -425,29 +423,32 @@ public class DebugPanel : MonoSingleton<DebugPanel>
     }
 
     /// <summary>
-    /// 通过反射扫描所有DebugToolBase子类中标记[DebugMethod]的方法并绘制按钮
+    /// 通过反射扫描所有DebugToolBase子类中标记[DebugMethod]的方法并绘制按钮，相同Category的归在一起
     /// </summary>
     private void DrawDynamicDebugMethods()
     {
         EnsureDebugMethodsLoaded();
 
-        string current_category = "";
-        foreach (var entry in cached_debug_methods_)
+        // 按 Category 分组
+        var grouped = cached_debug_methods_
+            .GroupBy(e => e.Category ?? "")
+            .OrderBy(g => g.Key);
+
+        foreach (var group in grouped)
         {
-            // 分类标题
-            if (entry.Category != current_category)
+            // 显示分类标题
+            if (!string.IsNullOrEmpty(group.Key))
             {
-                current_category = entry.Category;
-                if (!string.IsNullOrEmpty(current_category))
-                {
-                    GUILayout.Space(5);
-                    GUILayout.Label($"[{current_category}]", GetHeaderStyle());
-                }
+                GUILayout.Space(5);
+                GUILayout.Label($"[{group.Key}]", GetHeaderStyle());
             }
 
-            if (GUILayout.Button(entry.Label))
+            foreach (var entry in group)
             {
-                entry.Method.Invoke(entry.Instance, null);
+                if (GUILayout.Button(entry.Label))
+                {
+                    entry.Method.Invoke(entry.Instance, null);
+                }
             }
         }
     }
@@ -501,6 +502,98 @@ public class DebugPanel : MonoSingleton<DebugPanel>
 
     #region 辅助方法
 
+    /// <summary>
+    /// 缓存：已扫描的调试变量信息
+    /// </summary>
+    private struct CachedDebugProperty
+    {
+        public string VariableName;
+        public string ValueType;
+        public object InstanceValue;
+        public MemberInfo Member;
+        public object Instance;
+    }
+
+    private List<CachedDebugProperty> cached_debug_properties_ = null;
+
+    /// <summary>
+    /// 扫描所有 DebugToolBase 子类中标记 [DebugProperty] 的字段/属性，自动注册到 game_variables_
+    /// 变量名即字段/属性名（去除尾部下划线），类型由成员类型推断
+    /// </summary>
+    private void LoadDebugProperties()
+    {
+        if (cached_debug_properties_ != null) return;
+        cached_debug_properties_ = new List<CachedDebugProperty>();
+
+        var tool_base_type = typeof(DebugToolBase);
+        var assembly = Assembly.GetExecutingAssembly();
+
+        foreach (var type in assembly.GetTypes())
+        {
+            if (!type.IsClass || type.IsAbstract || !tool_base_type.IsAssignableFrom(type))
+                continue;
+
+            object instance = Activator.CreateInstance(type);
+
+            // 扫描字段
+            foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            {
+                var attr = field.GetCustomAttribute<DebugPropertyAttribute>();
+                if (attr == null) continue;
+
+                object instance_value = field.GetValue(instance);
+                string variable_name = field.Name;
+                string value_type = GetTypeName(field.FieldType);
+
+                cached_debug_properties_.Add(new CachedDebugProperty
+                {
+                    VariableName = variable_name,
+                    ValueType = value_type,
+                    InstanceValue = instance_value,
+                    Member = field,
+                    Instance = instance
+                });
+
+                AddGameVariable(variable_name, instance_value);
+            }
+
+            // 扫描属性
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            {
+                var attr = prop.GetCustomAttribute<DebugPropertyAttribute>();
+                if (attr == null) continue;
+
+                object instance_value = prop.GetValue(instance);
+                string variable_name = prop.Name;
+                string value_type = GetTypeName(prop.PropertyType);
+
+                cached_debug_properties_.Add(new CachedDebugProperty
+                {
+                    VariableName = variable_name,
+                    ValueType = value_type,
+                    InstanceValue = instance_value,
+                    Member = prop,
+                    Instance = instance
+                });
+
+                AddGameVariable(variable_name, instance_value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 根据 System.Type 获取值类型字符串
+    /// </summary>
+    private static string GetTypeName(Type type)
+    {
+        if (type == typeof(int)) return "int";
+        if (type == typeof(float)) return "float";
+        if (type == typeof(double)) return "float";
+        if (type == typeof(string)) return "string";
+        if (type == typeof(bool)) return "bool";
+        return "string";
+    }
+
     private void HandleLog(string log, string stack_trace, LogType type)
     {
         log_entries_.Insert(0, new LogEntry
@@ -508,7 +601,7 @@ public class DebugPanel : MonoSingleton<DebugPanel>
             message_ = log,
             stack_trace_ = stack_trace,
             type_ = type,
-            time_ = System.DateTime.Now.ToString("HH:mm:ss")
+            time_ = DateTime.Now.ToString("HH:mm:ss")
         });
 
         // 限制日志数量
@@ -595,7 +688,7 @@ public class DebugPanel : MonoSingleton<DebugPanel>
     private GUIStyle GetBigTextStyle()
     {
         GUIStyle style = new GUIStyle(GUI.skin.label);
-        style.fontSize = font_size_ + 10;
+        style.fontSize = font_size_ + 6;
         style.fontStyle = FontStyle.Bold;
         return style;
     }
