@@ -3,15 +3,16 @@ using UnityEngine;
 
 public class PlayerData
 {
-    public string               player_name_;
-    public int                  player_id_;
-    public int                  level_;
-    public int                  score_;
+    public string               player_name_ = "Player";
+    public int                  player_id_ = 1;
+    public int                  level_ = 1;
+    public int                  score_ = 0;
 
     [JsonProperty]
-    private float               health_;
+    private float               health_ = 100f;
+    
     [JsonProperty]
-    private bool                is_alive_;
+    private bool                is_alive_ = true;
 
     public float Health
     {

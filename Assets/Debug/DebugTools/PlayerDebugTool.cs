@@ -20,6 +20,7 @@ public class PlayerDebugTool : DebugToolBase
         if (player_data_ != null)
         {
             Debug.Log($"玩家数据 - 等级: {player_data_.level_}, 分数: {player_data_.score_}, 名字: {player_data_.player_name_}, 健康: {player_data_.Health}, 是否存活: {player_data_.IsAlive}");
+            this.Publish(EventName.UPDATE_USERINFO, player_data_);
         }
         else
         {
@@ -31,6 +32,8 @@ public class PlayerDebugTool : DebugToolBase
     public void ClearPlayerData()
     {
         SaveManager.DeleteSaveData();
+        player_data_ = new PlayerData();
+        this.Publish(EventName.UPDATE_USERINFO, player_data_);
         Debug.Log("玩家数据已清除");
     }
 
@@ -40,6 +43,8 @@ public class PlayerDebugTool : DebugToolBase
         if(Panel.TryGetVariable("HealthIncrease", out object increase))
         {
             player_data_.Health += (float)increase;
+            this.Publish(EventName.UPDATE_USERINFO, player_data_);
+            Debug.Log($"玩家血量已增加，当前血量: {player_data_.Health}");
         }
         else
         {
@@ -53,6 +58,7 @@ public class PlayerDebugTool : DebugToolBase
         if(Panel.TryGetVariable("Level", out object data))
         {
             player_data_.level_ += (int)data;
+            this.Publish(EventName.UPDATE_USERINFO, player_data_);
             Debug.Log($"玩家等级已提升，当前等级: {player_data_.level_}");
         }
         else
@@ -67,6 +73,7 @@ public class PlayerDebugTool : DebugToolBase
         if(Panel.TryGetVariable("PlayerName", out object name))
         {
             player_data_.player_name_ = name.ToString();
+            this.Publish(EventName.UPDATE_USERINFO, player_data_);
             Debug.Log($"玩家名字已设置为: {player_data_.player_name_}");
         }
         else
@@ -81,11 +88,27 @@ public class PlayerDebugTool : DebugToolBase
         if(Panel.TryGetVariable("PlayerID", out object id))
         {
             player_data_.player_id_ = (int)id;
+            this.Publish(EventName.UPDATE_USERINFO, player_data_);
             Debug.Log($"玩家ID已设置为: {player_data_.player_id_}");
         }
         else
         {
             Debug.LogWarning("未找到变量 'PlayerID'，请确保在面板中添加了该变量");
+        }
+    }
+
+    [DebugMethod("增加玩家分数")]
+    public void IncreasePlayerScore()
+    {
+        if(Panel.TryGetVariable("ScoreIncrease", out object increase))
+        {
+            player_data_.score_ += (int)increase;
+            this.Publish(EventName.UPDATE_USERINFO, player_data_);
+            Debug.Log($"玩家分数已增加，当前分数: {player_data_.score_}");
+        }
+        else
+        {
+            Debug.LogWarning("未找到变量 'ScoreIncrease'，请确保在面板中添加了该变量");
         }
     }
 }
