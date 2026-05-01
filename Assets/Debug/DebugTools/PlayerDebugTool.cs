@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -35,6 +36,58 @@ public class PlayerDebugTool : DebugToolBase
         player_data_ = new PlayerData();
         this.Publish(EventName.UPDATE_USERINFO, player_data_);
         Debug.Log("玩家数据已清除");
+    }
+
+    [DebugMethod("打印所有存档数据")]
+    public void PrintAllSaveData()
+    {
+        List<SaveSlotInfo> all_data = SaveManager.GetAllSaveSlots();
+        if (all_data.Count > 0)
+        {
+            Debug.Log("所有存档数据:");
+            foreach (var kvp in all_data)
+            {
+                Debug.Log($"存档ID: {kvp.slot_id_}, 存档名称: {kvp.slot_name_}, 存档时间: {kvp.create_time_}");
+            }
+        }
+        else
+        {
+            Debug.Log("没有找到任何存档数据");
+        }
+    }
+
+    [DebugMethod("删除当前存档")]
+    public void DeleteCurrentSave()
+    {
+        SaveManager.DeleteSaveSlot(SaveManager.CurrentSlotId);
+    }
+
+    [DebugMethod("切换存档槽位")]
+    public void SwitchSaveSlot()
+    {
+        if(Panel.TryGetVariable("SlotID", out object slot_id))
+        {
+            SaveManager.SwitchToSaveSlot((int)slot_id);
+            Debug.Log($"已切换到存档槽位: {(int)slot_id}");
+        }
+        else
+        {
+            Debug.LogWarning("未找到变量 'SlotID'，请确保在面板中添加了该变量");
+        }
+    }
+
+    [DebugMethod("删除指定存档槽位")]
+    public void DeleteSpecifiedSaveSlot()
+    {
+        if(Panel.TryGetVariable("SlotIDToDel", out object slot_id))
+        {
+            SaveManager.DeleteSaveSlot((int)slot_id);
+            Debug.Log($"已删除存档槽位: {(int)slot_id}");
+        }
+        else
+        {
+            Debug.LogWarning("未找到变量 'SlotIDToDel'，请确保在面板中添加了该变量");
+        }
     }
 
     [DebugMethod("增加玩家血量")]
