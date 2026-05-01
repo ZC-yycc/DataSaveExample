@@ -24,7 +24,7 @@ public static class EventCenter
         int Index { get; }
     }
 
-    // 用显式ID构造, 使用结构体体积小，可以不用new，直接声明即可
+    // 使用结构体体积小，可以不用new，直接声明即可
     public readonly struct EventKey : IEventKey
     {
         private readonly int index_;
