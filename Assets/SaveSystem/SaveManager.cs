@@ -285,8 +285,11 @@ public static class SaveManager
         // 从元数据中移除
         root_json_object_ = new JObject(); // 清空内存数据
         slots_meta_.slots_.Remove(slot);
-        slots_meta_.current_slot_id_ = -1; // 无激活槽位
-        current_slot_id_ = -1; // 无槽位
+
+        slots_meta_.current_slot_id_ = slots_meta_.current_slot_id_ == slot_id ?
+             -1 : slots_meta_.current_slot_id_; // 如果删除的是当前激活槽位，重置为无激活
+
+        current_slot_id_ = slot_id == current_slot_id_ ? -1 : current_slot_id_; // 如果删除的是当前槽位，重置为无激活
 
         SaveSlotsMetaToFile();
         Debug.Log($"已删除存档槽位: [{slot_id}] {slot.slot_name_}");
@@ -444,8 +447,11 @@ public static class SaveManager
 
         root_json_object_ = new JObject();
         slots_meta_.slots_.Remove(slot);
-        slots_meta_.current_slot_id_ = -1;
-        current_slot_id_ = -1;
+        
+        slots_meta_.current_slot_id_ = slots_meta_.current_slot_id_ == slot_id ?
+             -1 : slots_meta_.current_slot_id_;
+
+        current_slot_id_ = slot_id == current_slot_id_ ? -1 : current_slot_id_;
 
         await SaveSlotsMetaToFileAsync();
         Debug.Log($"已删除存档槽位: [{slot_id}] {slot.slot_name_}");

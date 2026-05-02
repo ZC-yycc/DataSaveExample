@@ -33,6 +33,13 @@ public class PlayerDebugTool : DebugToolBase
         SaveManager.CreateSaveSlot("新存档");
     }
 
+    [DebugMethod("创建新存档Async","存档管理")]
+    public async void CreateSaveDataAsync()
+    {
+        await SaveManager.CreateSaveSlotAsync("新存档Async");
+        Debug.Log("异步创建新存档完成");
+    }
+    
     [DebugMethod("切换存档槽位", "存档管理")]
     public void SwitchSaveSlot()
     {
