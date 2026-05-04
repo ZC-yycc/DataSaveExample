@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
+
 /// <summary>
 /// 调试页面管理器 - 提供运行时调试界面
 /// </summary>
@@ -42,7 +43,7 @@ public class DebugPanel : MonoSingleton<DebugPanel>
     {
         Application.logMessageReceived += HandleLog;
 
-        // 扫描 DebugToolBase 子类中标记 [DebugProperty] 的变量并注册
+        // 扫描带有DebugableAttribute标记的类，获取标记 [DebugProperty] 的变量并注册
         LoadDebugProperties();
     }
 
@@ -471,16 +472,15 @@ public class DebugPanel : MonoSingleton<DebugPanel>
         if (cached_debug_methods_ != null) return;
         cached_debug_methods_ = new List<CachedDebugMethod>();
 
-        // 扫描当前程序集中所有 DebugToolBase 的子类
-        var tool_base_type = typeof(DebugToolBase);
+        // 扫描当前程序集中所有 DebugableAttribute 标记的类，获取其中标记了 DebugMethodAttribute 的方法并缓存
         var assembly = Assembly.GetExecutingAssembly();
 
         foreach (var type in assembly.GetTypes())
         {
-            if (!type.IsClass || type.IsAbstract || !tool_base_type.IsAssignableFrom(type))
+            if (!type.IsClass || type.IsAbstract || !type.IsDefined(typeof(DebugableAttribute), false))
                 continue;
 
-            object instance = System.Activator.CreateInstance(type);
+            object instance = Activator.CreateInstance(type);
 
             foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             {
@@ -517,7 +517,7 @@ public class DebugPanel : MonoSingleton<DebugPanel>
     private List<CachedDebugProperty> cached_debug_properties_ = null;
 
     /// <summary>
-    /// 扫描所有 DebugToolBase 子类中标记 [DebugProperty] 的字段/属性，自动注册到 game_variables_
+    /// 扫描带有DebugableAttribute标记的类，获取标记 [DebugProperty] 的变量，自动注册到 game_variables_
     /// 变量名即字段/属性名（去除尾部下划线），类型由成员类型推断
     /// </summary>
     private void LoadDebugProperties()
@@ -525,14 +525,14 @@ public class DebugPanel : MonoSingleton<DebugPanel>
         if (cached_debug_properties_ != null) return;
         cached_debug_properties_ = new List<CachedDebugProperty>();
 
-        var tool_base_type = typeof(DebugToolBase);
         var assembly = Assembly.GetExecutingAssembly();
 
         foreach (var type in assembly.GetTypes())
         {
-            if (!type.IsClass || type.IsAbstract || !tool_base_type.IsAssignableFrom(type))
+            if (!type.IsClass || type.IsAbstract || !type.IsDefined(typeof(DebugableAttribute), false))
                 continue;
 
+            // 创建类实例以访问其成员变量，修改变量时也需要通过这个实例来修改
             object instance = Activator.CreateInstance(type);
 
             // 扫描字段
