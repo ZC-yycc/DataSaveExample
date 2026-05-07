@@ -1,21 +1,22 @@
 using TMPro;
 using UnityEngine;
+using EventBus;
 
 public class EventReceiver : MonoBehaviour
 {
-    [SerializeField] private TMP_Text player_name_;
-    [SerializeField] private TMP_Text player_id_;
-    [SerializeField] private TMP_Text level_;
-    [SerializeField] private TMP_Text score_;
-    [SerializeField] private TMP_Text health_;
+    [SerializeField] private TMP_Text               player_name_;
+    [SerializeField] private TMP_Text               player_id_;
+    [SerializeField] private TMP_Text               level_;
+    [SerializeField] private TMP_Text               score_;
+    [SerializeField] private TMP_Text               health_;
 
     public void Awake()
     {
-        transform.Subscribe(EventName.UPDATE_USERINFO, UpdateInfo);
+        EventBus<UpdateUserInfoEvent, PlayerData>.OnEvent += UpdateInfo;
     }
     public void OnDestroy()
     {
-        transform.Unsubscribe(EventName.UPDATE_USERINFO, UpdateInfo);
+        EventBus<UpdateUserInfoEvent, PlayerData>.OnEvent -= UpdateInfo;
     }
     public void UpdateInfo(PlayerData data)
     {
